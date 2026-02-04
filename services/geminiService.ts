@@ -7,16 +7,28 @@ const ai = new GoogleGenAI({ apiKey: process.env.API_KEY || "" });
 export async function generateWorksheetData(
   grade: string,
   topic: string,
-  difficulty: Difficulty
+  difficulty: Difficulty,
+  numQuestions: number
 ): Promise<Worksheet> {
+  // Using Pro for maximum quality in educational logic
   const model = "gemini-3-pro-preview";
   
-  const prompt = `Generate a high-quality Mathematics worksheet for CBSE ${grade}, Topic: ${topic}, Difficulty Level: ${difficulty}.
-  Include exactly 5 diverse questions. 
-  - For EASY: Similar to NCERT textbook examples.
-  - For MEDIUM: Standard practice problems with moderate complexity.
-  - For HARD: Higher Order Thinking Skills (HOTS) and Olympiad level questions.
-  Provide detailed step-by-step solutions for each.`;
+  const prompt = `You are a world-class Mathematics educator specialized in the CBSE/NCERT curriculum for India.
+  Generate a professional math worksheet for ${grade}.
+  Topic: ${topic}
+  Difficulty Level: ${difficulty}
+  Number of Questions: Exactly ${numQuestions}
+  
+  Guidelines:
+  - For Class 1: Use simple language, focus on visual concepts, and use small numbers (usually up to 20 or 50).
+  - Difficulty: 
+    - EASY: Basic recall and simple application.
+    - MEDIUM: Conceptual understanding and multi-step problems.
+    - HARD: Critical thinking, HOTS (Higher Order Thinking Skills), and Olympiad-style challenges.
+  - Mix question types: Some MCQs (provide 4 clear options) and some Short Answers.
+  - Provide a clear, child-friendly step-by-step solution for every question.
+  
+  Respond ONLY with a valid JSON object matching the requested schema.`;
 
   const response = await ai.models.generateContent({
     model,
@@ -37,14 +49,14 @@ export async function generateWorksheetData(
               properties: {
                 id: { type: Type.INTEGER },
                 question: { type: Type.STRING },
-                type: { type: Type.STRING, description: "MCQ or Short Answer" },
+                type: { type: Type.STRING, enum: ["MCQ", "Short Answer"] },
                 options: { 
                   type: Type.ARRAY, 
                   items: { type: Type.STRING },
-                  description: "Only for MCQ type"
+                  description: "Required if type is MCQ, otherwise empty array"
                 },
-                answer: { type: Type.STRING, description: "The correct final answer" },
-                solution: { type: Type.STRING, description: "Step by step explanation" }
+                answer: { type: Type.STRING },
+                solution: { type: Type.STRING }
               },
               required: ["id", "question", "type", "answer", "solution"]
             }
@@ -55,11 +67,16 @@ export async function generateWorksheetData(
     }
   });
 
+  const text = response.text;
+  if (!text) {
+    throw new Error("No content received from AI engine.");
+  }
+
   try {
-    const data = JSON.parse(response.text);
+    const data = JSON.parse(text);
     return data as Worksheet;
   } catch (error) {
-    console.error("Failed to parse worksheet JSON:", error);
-    throw new Error("Failed to generate a valid worksheet structure.");
+    console.error("AI Response Parsing Failed:", text);
+    throw new Error("The AI generated an invalid format. Please try again.");
   }
 }
