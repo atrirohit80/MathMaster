@@ -6,19 +6,38 @@
     <meta name="viewport" content="width=device-width, initial-scale=1.0">
     <meta name="robots" content="index, follow">
     
-    <title>MathMaster AI | CBSE & NCERT Math Worksheets Classes 1-8</title>
-    <meta name="description" content="Free AI-powered math worksheet generator for CBSE students. Custom NCERT-aligned practice sheets for Class 1 to 8 with instant solutions and PDF export.">
-    <meta name="keywords" content="CBSE Math, NCERT Worksheets, Class 1 Math, AI Math Generator, Free Math PDF, Indian School Education">
+    <title>PracticeWithAI | Fun Learning & Worksheets for Classes 1-10</title>
+    <meta name="description" content="AI-powered fun learning platform for CBSE students. Custom practice sheets for Class 1 to 10 with instant solutions and PDF export.">
 
     <script src="https://cdn.tailwindcss.com"></script>
-    <link href="https://fonts.googleapis.com/css2?family=Inter:wght@400;600;700;800;900&display=swap" rel="stylesheet">
+    <link href="https://fonts.googleapis.com/css2?family=Fredoka:wght@300;400;500;600;700&family=Inter:wght@400;600;700;800;900&display=swap" rel="stylesheet">
     
     <!-- Use bundled version for reliability with all dependencies -->
     <script src="https://cdnjs.cloudflare.com/ajax/libs/html2pdf.js/0.10.1/html2pdf.bundle.min.js"></script>
 
     <style>
-        body { font-family: 'Inter', sans-serif; scroll-behavior: smooth; }
+        body { 
+            font-family: 'Fredoka', 'Inter', sans-serif; 
+            scroll-behavior: smooth; 
+            background-color: #f8fafc;
+        }
         
+        .glass-card {
+            background: rgba(255, 255, 255, 0.8);
+            backdrop-filter: blur(12px);
+            border: 1px solid rgba(255, 255, 255, 0.3);
+        }
+
+        .blob {
+            position: absolute;
+            width: 500px;
+            height: 500px;
+            background: linear-gradient(180deg, rgba(59, 130, 246, 0.2) 0%, rgba(37, 99, 235, 0.2) 100%);
+            filter: blur(80px);
+            border-radius: 50%;
+            z-index: -1;
+        }
+
         @media print {
             .print\:hidden { display: none !important; }
             .print\:block { display: block !important; }
@@ -27,16 +46,14 @@
             .worksheet-container { box-shadow: none !important; border: none !important; width: 100% !important; }
         }
 
-        /* Prevent page breaks inside questions during PDF generation */
         .page-break-avoid {
             page-break-inside: avoid !important;
             break-inside: avoid !important;
         }
 
-        /* Custom Scrollbar */
-        ::-webkit-scrollbar { width: 8px; }
+        ::-webkit-scrollbar { width: 10px; }
         ::-webkit-scrollbar-track { background: #f1f5f9; }
-        ::-webkit-scrollbar-thumb { background: #cbd5e1; border-radius: 4px; }
+        ::-webkit-scrollbar-thumb { background: #cbd5e1; border-radius: 5px; }
         ::-webkit-scrollbar-thumb:hover { background: #94a3b8; }
     </style>
 <script type="importmap">
@@ -53,7 +70,7 @@
 }
 </script>
 </head>
-<body class="bg-slate-50 text-slate-900 antialiased">
+<body class="antialiased overflow-x-hidden">
     <div id="root"></div>
     <script type="module" src="index.tsx"></script>
 </body>

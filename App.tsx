@@ -1,10 +1,9 @@
 
 import React, { useState, useEffect, useRef } from 'react';
-import { CBSE_TOPICS } from './constants';
+import { CURRICULUM, SUBJECT_COLORS } from './constants';
 import { Difficulty, Worksheet } from './types';
 import { generateWorksheetData } from './services/geminiService';
 import { 
-  BookOpen, 
   GraduationCap, 
   BrainCircuit, 
   FileDown, 
@@ -12,31 +11,65 @@ import {
   RefreshCw, 
   ChevronLeft, 
   Lightbulb,
-  Zap,
-  Target,
-  Trophy,
   ArrowRight,
   Sparkles,
   Rocket,
   Star,
   Calculator,
   AlertCircle,
-  Hash,
-  ShieldCheck,
   FileText,
-  Printer
+  Printer,
+  Book,
+  Microscope,
+  Languages,
+  Globe,
+  Settings,
+  Quote,
+  Zap,
+  Heart,
+  Target,
+  Trophy,
+  Smile,
+  Compass,
+  Palette
 } from 'lucide-react';
 
-// Declare global html2pdf for TypeScript
 declare var html2pdf: any;
 
 type View = 'landing' | 'setup' | 'worksheet';
 
-const DAILY_LIMIT = 10;
+const DAILY_LIMIT = 15;
+
+const MOTIVATIONAL_QUOTES = [
+  { text: "The beautiful thing about learning is that no one can take it away from you.", author: "B.B. King" },
+  { text: "You have brains in your head. You have feet in your shoes. You can steer yourself any direction you choose.", author: "Dr. Seuss" },
+  { text: "Every expert was once a beginner. Keep practicing, little champion!", author: "Anonymous" },
+  { text: "Mistakes are proof that you are trying. Keep going, you're doing great!", author: "Unknown" },
+  { text: "Learning is the only thing the mind never exhausts, never fears, and never regrets.", author: "Leonardo da Vinci" },
+  { text: "The more that you read, the more things you will know. The more that you learn, the more places you'll go.", author: "Dr. Seuss" }
+];
+
+const BENEFITS = [
+  { icon: Target, title: "Sharp Focus", text: "Regular practice turns tough concepts into easy wins. Master your focus like a pro!", color: "blue" },
+  { icon: Zap, title: "Super Speed", text: "Solve problems in the blink of an eye. Faster practice means more time for fun!", color: "orange" },
+  { icon: Trophy, title: "Winner's Mindset", text: "Every sheet you finish is a level-up for your brain. Grow your confidence!", color: "purple" }
+];
+
+const SubjectIcon = ({ subject, size = 24 }: { subject: string, size?: number }) => {
+  switch (subject) {
+    case 'Mathematics': return <Calculator size={size} />;
+    case 'Science': return <Microscope size={size} />;
+    case 'English': return <Languages size={size} />;
+    case 'Social Science': return <Globe size={size} />;
+    case 'EVS': return <Book size={size} />;
+    default: return <Book size={size} />;
+  }
+};
 
 export default function App() {
   const [view, setView] = useState<View>('landing');
   const [grade, setGrade] = useState<string | null>(null);
+  const [subject, setSubject] = useState<string | null>(null);
   const [topic, setTopic] = useState<string | null>(null);
   const [difficulty, setDifficulty] = useState<Difficulty>(Difficulty.EASY);
   const [numQuestions, setNumQuestions] = useState<number>(10);
@@ -48,55 +81,51 @@ export default function App() {
   const [visibleSolutions, setVisibleSolutions] = useState<{ [key: number]: boolean }>({});
   const [limitReached, setLimitReached] = useState(false);
   const [error, setError] = useState<string | null>(null);
+  const [randomQuote, setRandomQuote] = useState(MOTIVATIONAL_QUOTES[0]);
 
   const worksheetRef = useRef<HTMLDivElement>(null);
 
   useEffect(() => {
     window.scrollTo({ top: 0, behavior: 'smooth' });
+    if (view === 'landing') {
+      setRandomQuote(MOTIVATIONAL_QUOTES[Math.floor(Math.random() * MOTIVATIONAL_QUOTES.length)]);
+    }
   }, [view]);
 
-  const checkAndIncrementLimit = (): boolean => {
-    try {
-      const today = new Date().toISOString().split('T')[0];
-      const key = 'mathmaster_limit_v3';
-      const stored = JSON.parse(localStorage.getItem(key) || '{}');
-      
-      if (stored.date !== today) {
-        const reset = { count: 1, date: today };
-        localStorage.setItem(key, JSON.stringify(reset));
-        return true;
-      }
+  const checkLimit = () => {
+    const today = new Date().toDateString();
+    const stored = JSON.parse(localStorage.getItem('pwai_usage') || '{}');
+    if (stored.date !== today) return true;
+    return stored.count < DAILY_LIMIT;
+  };
 
-      if (stored.count >= DAILY_LIMIT) return false;
-
-      stored.count += 1;
-      localStorage.setItem(key, JSON.stringify(stored));
-      return true;
-    } catch {
-      return true;
-    }
+  const incrementLimit = () => {
+    const today = new Date().toDateString();
+    const stored = JSON.parse(localStorage.getItem('pwai_usage') || '{}');
+    const count = (stored.date === today ? stored.count : 0) + 1;
+    localStorage.setItem('pwai_usage', JSON.stringify({ date: today, count }));
   };
 
   const handleGenerate = async () => {
-    if (!grade || !topic) return;
-    setError(null);
-
-    if (!checkAndIncrementLimit()) {
+    if (!grade || !subject || !topic) return;
+    if (!checkLimit()) {
       setLimitReached(true);
       return;
     }
 
     setLoading(true);
+    setError(null);
     setUserAnswers({});
     setIsGraded(false);
     setVisibleSolutions({});
     
     try {
-      const data = await generateWorksheetData(grade, topic, difficulty, numQuestions);
+      const data = await generateWorksheetData(grade, subject, topic, difficulty, numQuestions);
       setWorksheet(data);
       setView('worksheet');
+      incrementLimit();
     } catch (err) {
-      setError(err instanceof Error ? err.message : "Math engine is busy. Try again!");
+      setError("AI Engine is busy. Please try again.");
     } finally {
       setLoading(false);
     }
@@ -104,369 +133,485 @@ export default function App() {
 
   const handleExportPDF = () => {
     if (!worksheetRef.current || !worksheet) return;
-    
-    // Check if library is loaded
     if (typeof html2pdf === 'undefined') {
-      setError("PDF library is still loading or blocked by a browser extension. Please try standard print (Ctrl+P).");
+      setError("PDF library error. Try Ctrl+P.");
       return;
     }
 
     setIsExporting(true);
     const element = worksheetRef.current;
-    const fileName = `MathMaster_${worksheet.title.replace(/\s+/g, '_')}_${grade.replace(/\s+/g, '')}.pdf`;
+    const fileName = `PracticeWithAI_${worksheet.subject}_${grade.replace(/\s+/g, '_')}.pdf`;
     
     const opt = {
-      margin: [15, 15, 15, 15],
+      margin: [10, 10, 10, 10],
       filename: fileName,
       image: { type: 'jpeg', quality: 0.98 },
-      html2canvas: { 
-        scale: 2, 
-        useCORS: true, 
-        letterRendering: true,
-        logging: false,
-        backgroundColor: '#ffffff'
-      },
+      html2canvas: { scale: 2, useCORS: true, letterRendering: true },
       jsPDF: { unit: 'mm', format: 'a4', orientation: 'portrait' },
       pagebreak: { mode: ['avoid-all', 'css', 'legacy'] }
     };
 
-    // Use html2pdf global
-    html2pdf().set(opt).from(element).save().then(() => {
-      setIsExporting(false);
-    }).catch((err: any) => {
-      console.error("PDF Export failed:", err);
-      setIsExporting(false);
-      setError("Internal PDF export failed. Please use 'Print' -> 'Save as PDF' from your browser menu.");
-    });
+    html2pdf().set(opt).from(element).save().then(() => setIsExporting(false)).catch(() => setIsExporting(false));
   };
 
   const reset = () => {
     setGrade(null);
+    setSubject(null);
     setTopic(null);
-    setWorksheet(null);
     setError(null);
     setView('setup');
   };
 
+  const currentThemeColor = subject ? SUBJECT_COLORS[subject] || 'blue' : 'blue';
+
   if (loading) {
     return (
       <div className="min-h-screen flex flex-col items-center justify-center bg-white p-6">
-        <div className="relative mb-8">
-          <div className="w-24 h-24 border-8 border-blue-50 border-t-blue-600 rounded-full animate-spin"></div>
-          <Sparkles className="absolute inset-0 m-auto text-blue-600 w-8 h-8 animate-pulse" />
+        <div className="relative mb-10">
+          <div className={`w-32 h-32 border-[12px] border-slate-50 border-t-${currentThemeColor}-500 rounded-full animate-spin`}></div>
+          <Rocket className={`absolute inset-0 m-auto text-${currentThemeColor}-500 w-10 h-10 animate-bounce`} />
         </div>
-        <h2 className="text-3xl font-black text-slate-800 animate-pulse">Generating Magic...</h2>
-        <p className="mt-4 text-slate-500 font-medium text-lg">Our AI teacher is writing {grade} questions for you!</p>
+        <h2 className="text-4xl font-black text-slate-800 animate-pulse text-center">Launching Your Lesson!</h2>
+        <p className="mt-4 text-slate-500 font-medium text-lg max-w-sm text-center">Our AI teacher is picking the best {subject} questions for {grade}...</p>
       </div>
     );
   }
 
   return (
-    <div className="min-h-screen flex flex-col selection:bg-blue-100 selection:text-blue-900">
+    <div className="min-h-screen flex flex-col selection:bg-blue-200 antialiased relative">
+      <div className="blob top-[-200px] left-[-200px]"></div>
+      <div className="blob bottom-[-200px] right-[-200px] bg-purple-200"></div>
+
       {/* Navbar */}
-      <header className="bg-white/80 backdrop-blur-lg border-b sticky top-0 z-50 px-4 sm:px-6 h-20 flex items-center justify-between print:hidden">
-        <div className="flex items-center gap-3 cursor-pointer group" onClick={() => setView('landing')}>
-          <div className="bg-gradient-to-br from-blue-600 to-indigo-700 p-2.5 rounded-2xl shadow-xl shadow-blue-100 group-hover:rotate-6 transition-transform">
-            <GraduationCap className="text-white w-7 h-7" />
+      <header className="bg-white/80 backdrop-blur-xl border-b sticky top-0 z-50 px-6 sm:px-10 h-24 flex items-center justify-between print:hidden">
+        <div className="flex items-center gap-4 cursor-pointer group" onClick={() => setView('landing')}>
+          <div className="bg-gradient-to-br from-blue-600 to-indigo-700 p-3 rounded-[1.25rem] shadow-xl shadow-blue-200 group-hover:rotate-12 transition-all">
+            <BrainCircuit className="text-white w-8 h-8" />
           </div>
           <div>
-            <h1 className="text-2xl font-black tracking-tight text-slate-900">
-              Math<span className="text-blue-600">Master</span>
+            <h1 className="text-3xl font-black tracking-tight text-slate-900 leading-none">
+              Practice<span className="text-blue-600">WithAI</span>
             </h1>
-            <span className="text-[10px] font-black text-slate-400 uppercase tracking-[0.2em] block">AI Academy India</span>
+            <div className="flex items-center gap-2 mt-1">
+              <span className="text-[10px] font-black text-slate-400 uppercase tracking-widest block">Level up your learning</span>
+              <div className="w-1.5 h-1.5 rounded-full bg-green-500 animate-pulse"></div>
+            </div>
           </div>
         </div>
-        <nav className="flex items-center gap-6">
+        <nav className="flex items-center gap-8">
+          {view === 'landing' && (
+            <div className="hidden lg:flex items-center gap-8 font-bold text-slate-500">
+              <a href="#benefits" className="hover:text-blue-600 transition-colors">Benefits</a>
+              <a href="#subjects" className="hover:text-blue-600 transition-colors">Subjects</a>
+              <button onClick={() => setView('setup')} className="px-6 py-3 bg-blue-600 text-white rounded-2xl shadow-lg shadow-blue-100 hover:bg-blue-700 transition-all flex items-center gap-2">
+                <Rocket size={18} /> Start Free
+              </button>
+            </div>
+          )}
           {view !== 'landing' && (
-            <button onClick={() => setView('landing')} className="text-sm font-black text-slate-500 hover:text-blue-600 transition-colors flex items-center gap-1">
-              <ChevronLeft size={16} /> Home
+            <button onClick={() => setView('landing')} className="text-lg font-black text-slate-500 hover:text-blue-600 transition-colors flex items-center gap-2">
+              <ChevronLeft size={24} /> Home
             </button>
           )}
         </nav>
       </header>
 
       <main className="flex-grow">
-        {/* Alerts */}
         {error && (
-          <div className="max-w-4xl mx-auto mt-6 px-4">
-            <div className="bg-red-50 border-l-4 border-red-500 p-4 rounded-r-2xl flex items-center justify-between animate-in slide-in-from-top-4">
-              <div className="flex items-center gap-3 text-red-800 font-bold">
-                <AlertCircle size={20} /> {error}
-              </div>
-              <button onClick={() => setError(null)} className="text-red-400 hover:text-red-600 font-black">×</button>
+          <div className="max-w-4xl mx-auto mt-8 px-4">
+            <div className="bg-red-50 border-2 border-red-100 p-6 rounded-[2rem] flex items-center justify-between shadow-lg">
+              <span className="flex items-center gap-4 text-red-800 font-bold text-lg"><AlertCircle size={24} /> {error}</span>
+              <button onClick={() => setError(null)} className="text-red-400 font-black text-2xl">×</button>
             </div>
           </div>
         )}
 
         {limitReached && (
-          <div className="fixed inset-0 z-[100] bg-slate-900/60 backdrop-blur-sm flex items-center justify-center p-4">
-            <div className="bg-white rounded-[2.5rem] p-10 max-w-md w-full text-center space-y-6 shadow-2xl animate-in zoom-in duration-300">
-              <div className="w-20 h-20 bg-amber-100 rounded-3xl flex items-center justify-center mx-auto">
-                <ShieldCheck className="text-amber-600 w-10 h-10" />
-              </div>
-              <h3 className="text-3xl font-black text-slate-900">Break Time!</h3>
-              <p className="text-slate-600 text-lg font-medium leading-relaxed">
-                You've created {DAILY_LIMIT} worksheets today. To keep the service fast for everyone, please come back tomorrow!
-              </p>
-              <button onClick={() => setLimitReached(false)} className="w-full py-5 bg-slate-900 text-white rounded-2xl font-black text-lg hover:bg-slate-800 transition-all">
-                Close
-              </button>
+          <div className="fixed inset-0 z-[100] bg-slate-900/40 backdrop-blur-md flex items-center justify-center p-4">
+            <div className="bg-white rounded-[3rem] p-12 max-w-lg w-full text-center space-y-8 shadow-2xl border-4 border-blue-50">
+               <div className="w-24 h-24 bg-blue-50 rounded-[2rem] flex items-center justify-center mx-auto shadow-inner"><Settings className="text-blue-600 w-12 h-12 animate-spin-slow" /></div>
+               <div>
+                 <h3 className="text-4xl font-black mb-4">Energy Refill! ⚡</h3>
+                 <p className="text-slate-500 font-medium text-lg leading-relaxed">You've generated {DAILY_LIMIT} worksheets today. That's amazing progress! Rest your brain and come back tomorrow for more fun learning.</p>
+               </div>
+               <button onClick={() => setLimitReached(false)} className="w-full py-6 bg-slate-900 text-white rounded-[1.5rem] font-black text-2xl hover:bg-black transition-all">Got it!</button>
             </div>
           </div>
         )}
 
         {view === 'landing' && (
-          <div className="animate-in fade-in duration-700">
-            <section className="py-24 px-4 text-center">
-              <div className="max-w-5xl mx-auto">
-                <div className="inline-flex items-center gap-2 bg-blue-50 text-blue-700 px-5 py-2 rounded-full text-sm font-black mb-8 border border-blue-100">
-                  <Star className="w-4 h-4 text-yellow-500 fill-current" />
-                  <span>Trusted by 10,000+ Indian Parents & Teachers</span>
+          <div className="animate-in fade-in slide-in-from-top-4 duration-1000">
+            {/* Hero Section */}
+            <section className="relative pt-24 pb-20 px-6 text-center overflow-hidden">
+              <div className="max-w-6xl mx-auto grid lg:grid-cols-2 gap-16 items-center">
+                <div className="text-left space-y-10">
+                  <div className="inline-flex items-center gap-3 bg-white px-6 py-3 rounded-full text-sm font-black shadow-xl shadow-slate-200/50 border border-slate-100 animate-bounce">
+                     <Smile className="text-yellow-400" size={20} /> 
+                     <span className="uppercase tracking-[0.2em] text-slate-600">Fun Practice for Future Leaders</span>
+                  </div>
+                  
+                  <h2 className="text-6xl sm:text-8xl font-black text-slate-900 leading-[0.95] tracking-tighter">
+                    Make Every <br/>
+                    <span className="text-transparent bg-clip-text bg-gradient-to-r from-blue-600 via-purple-600 to-indigo-600">Lesson Fun!</span>
+                  </h2>
+                  
+                  <p className="text-xl sm:text-2xl text-slate-500 max-w-xl font-medium leading-relaxed">
+                    Personalized worksheets for Class 1 to 10. Master your subjects with AI-powered practice that feels like a game!
+                  </p>
+
+                  <div className="flex flex-col sm:flex-row items-center gap-6">
+                    <button onClick={() => setView('setup')} className="group px-12 py-7 bg-blue-600 hover:bg-blue-700 text-white font-black text-2xl rounded-[2rem] shadow-2xl shadow-blue-200 transition-all hover:-translate-y-2 active:scale-95 flex items-center gap-4">
+                      Create a Sheet <Rocket size={32} className="group-hover:translate-x-1 group-hover:-translate-y-1 transition-transform" />
+                    </button>
+                    <div className="flex items-center gap-2 text-slate-400 font-bold uppercase tracking-widest text-xs">
+                       <CheckCircle2 className="text-green-500" /> Free & Unlimited Practice
+                    </div>
+                  </div>
                 </div>
-                <h2 className="text-6xl sm:text-8xl font-black text-slate-900 leading-[1.1] mb-8 tracking-tighter">
-                  Smart Math Worksheets <br/>
-                  <span className="text-transparent bg-clip-text bg-gradient-to-r from-blue-600 via-indigo-600 to-violet-600">Generated in Seconds</span>
-                </h2>
-                <p className="text-xl sm:text-2xl text-slate-500 max-w-3xl mx-auto mb-12 font-medium leading-relaxed">
-                  Professional Class 1-8 worksheets tailored for CBSE and NCERT syllabus. From counting to calculus, we make practice fun.
-                </p>
-                <div className="flex flex-col sm:flex-row items-center justify-center gap-6">
-                  <button 
-                    onClick={() => setView('setup')}
-                    className="w-full sm:w-auto px-12 py-6 bg-blue-600 hover:bg-blue-700 text-white font-black text-2xl rounded-[2rem] shadow-2xl shadow-blue-200 transition-all hover:-translate-y-1 active:scale-95 flex items-center justify-center gap-3"
-                  >
-                    Start Generating <ArrowRight size={28} />
-                  </button>
-                  <div className="flex items-center gap-3 text-slate-400 font-bold uppercase tracking-widest text-xs">
-                    <CheckCircle2 className="text-green-500" size={18} /> No Sign-up Required
+
+                {/* Joyful Hero Image */}
+                <div className="relative">
+                  <div className="absolute -inset-4 bg-gradient-to-tr from-blue-400 to-purple-400 rounded-[4rem] blur-2xl opacity-20 animate-pulse"></div>
+                  <div className="relative rounded-[3.5rem] overflow-hidden shadow-[0_40px_100px_-20px_rgba(0,0,0,0.15)] border-[12px] border-white">
+                    <img 
+                      src="https://images.unsplash.com/photo-1543269865-cbf427effbad?auto=format&fit=crop&q=80&w=1200" 
+                      alt="Joyful students learning together" 
+                      className="w-full h-[600px] object-cover"
+                    />
+                  </div>
+                  {/* Floating Elements */}
+                  <div className="absolute -top-10 -left-10 bg-white p-6 rounded-[2rem] shadow-2xl animate-bounce" style={{animationDuration: '3s'}}>
+                    <Calculator className="text-blue-500" size={40} />
+                  </div>
+                  <div className="absolute -bottom-10 -right-10 bg-white p-6 rounded-[2rem] shadow-2xl animate-bounce" style={{animationDuration: '4s'}}>
+                    <Microscope className="text-green-500" size={40} />
                   </div>
                 </div>
               </div>
             </section>
 
-            {/* Benefit Grid */}
-            <section className="bg-white py-24 border-y border-slate-100">
-              <div className="max-w-6xl mx-auto px-4 grid grid-cols-1 md:grid-cols-3 gap-12">
-                {[
-                  { icon: Target, color: 'blue', title: 'CBSE Aligned', desc: 'Questions strictly follow the latest NCERT guidelines and curriculum.' },
-                  { icon: Zap, color: 'orange', title: 'Instant PDF Export', desc: 'Save high-quality PDFs ready for home or classroom printing instantly.' },
-                  { icon: Trophy, color: 'green', title: 'Olympiad Level', desc: 'Special mode for competitive exam preparation like IMO and NSTSE.' }
-                ].map((item, idx) => (
-                  <article key={idx} className="group p-10 rounded-[2.5rem] bg-slate-50 hover:bg-white border-4 border-transparent hover:border-blue-50 transition-all">
-                    <div className={`w-16 h-16 bg-${item.color === 'blue' ? 'blue' : item.color === 'orange' ? 'orange' : 'green'}-600 text-white rounded-2xl flex items-center justify-center mb-8 shadow-xl shadow-slate-100 group-hover:rotate-12 transition-transform`}>
-                      <item.icon size={32} />
+            {/* Redesigned Quote Section */}
+            <section className="py-24 px-6 relative overflow-hidden">
+               <div className="max-w-5xl mx-auto">
+                 <div className="bg-white rounded-[4rem] p-16 shadow-2xl border-2 border-slate-50 relative overflow-hidden group">
+                    <div className="absolute top-0 right-0 p-20 opacity-5 group-hover:scale-110 transition-transform duration-1000">
+                       <Palette size={200} />
                     </div>
-                    <h3 className="text-2xl font-black text-slate-900 mb-4">{item.title}</h3>
-                    <p className="text-slate-500 font-medium text-lg leading-relaxed">{item.desc}</p>
-                  </article>
-                ))}
+                    <div className="relative z-10 flex flex-col items-center text-center space-y-8">
+                       <div className="w-20 h-20 bg-blue-50 rounded-3xl flex items-center justify-center text-blue-600 shadow-inner">
+                          <Quote size={40} className="fill-current" />
+                       </div>
+                       <blockquote className="text-4xl sm:text-5xl font-black text-slate-800 leading-tight italic">
+                         "{randomQuote.text}"
+                       </blockquote>
+                       <div className="flex items-center gap-4">
+                          <div className="h-1 w-12 bg-blue-600 rounded-full"></div>
+                          <span className="text-2xl font-black text-blue-600 uppercase tracking-widest">{randomQuote.author}</span>
+                          <div className="h-1 w-12 bg-blue-600 rounded-full"></div>
+                       </div>
+                    </div>
+                 </div>
+               </div>
+            </section>
+
+            {/* Benefits Section */}
+            <section id="benefits" className="py-32 px-6 bg-white/40">
+              <div className="max-w-6xl mx-auto">
+                <div className="text-center mb-24 space-y-4">
+                  <h3 className="text-4xl sm:text-6xl font-black text-slate-900">Why Daily Practice?</h3>
+                  <p className="text-xl text-slate-500 font-medium">It's not just about grades, it's about building a brighter future!</p>
+                </div>
+                
+                <div className="grid grid-cols-1 md:grid-cols-3 gap-12">
+                   {BENEFITS.map((b, i) => (
+                     <div key={i} className="bg-white p-12 rounded-[3.5rem] shadow-xl shadow-slate-100/50 border-2 border-slate-50 hover:-translate-y-4 transition-all duration-500 group relative overflow-hidden">
+                        <div className={`absolute top-0 right-0 w-32 h-32 bg-${b.color}-50 rounded-full -mr-16 -mt-16 opacity-50`}></div>
+                        <div className={`w-20 h-20 rounded-[1.5rem] bg-${b.color}-100 flex items-center justify-center mb-8 group-hover:rotate-12 transition-transform shadow-lg`}>
+                          <b.icon className={`text-${b.color}-600`} size={40} />
+                        </div>
+                        <h4 className="text-3xl font-black text-slate-900 mb-4">{b.title}</h4>
+                        <p className="text-slate-500 text-lg font-medium leading-relaxed">{b.text}</p>
+                     </div>
+                   ))}
+                </div>
               </div>
+            </section>
+            
+            {/* Subjects Grid */}
+            <section id="subjects" className="py-32 px-6">
+              <div className="max-w-6xl mx-auto">
+                <div className="flex flex-col md:flex-row items-end justify-between mb-20 gap-8">
+                  <div className="max-w-xl text-left">
+                    <div className="flex items-center gap-2 text-blue-600 font-black uppercase tracking-widest text-xs mb-4">
+                       <Compass size={16} /> Explore Curriculum
+                    </div>
+                    <h3 className="text-5xl font-black text-slate-900 mb-6">Choose Your Mission</h3>
+                    <p className="text-xl text-slate-500 font-medium">Select a subject and let's start your brain-workout today!</p>
+                  </div>
+                  <button onClick={() => setView('setup')} className="px-10 py-5 bg-slate-900 text-white font-black rounded-3xl text-xl hover:bg-black transition-all flex items-center gap-3 shadow-xl">
+                    View All Classes <ArrowRight size={24} />
+                  </button>
+                </div>
+
+                <div className="grid grid-cols-1 sm:grid-cols-2 lg:grid-cols-4 gap-8">
+                   {[
+                     { name: "Mathematics", icon: Calculator, color: "blue", img: "https://images.unsplash.com/photo-1509228463558-ce2ec3306971?auto=format&fit=crop&q=80&w=600" },
+                     { name: "Science", icon: Microscope, color: "green", img: "https://images.unsplash.com/photo-1530210124550-912dc1381cb8?auto=format&fit=crop&q=80&w=600" },
+                     { name: "English", icon: Languages, color: "purple", img: "https://images.unsplash.com/photo-1456513080510-7bf3a84b82f8?auto=format&fit=crop&q=80&w=600" },
+                     { name: "Social Science", icon: Globe, color: "orange", img: "https://images.unsplash.com/photo-1526778548025-fa2f459cd5c1?auto=format&fit=crop&q=80&w=600" }
+                   ].map((s, i) => (
+                     <div key={i} onClick={() => {setSubject(s.name); setView('setup');}} className="group relative overflow-hidden rounded-[2.5rem] aspect-[4/5] cursor-pointer shadow-2xl transition-all hover:scale-[1.02] border-4 border-white">
+                       <img src={s.img} alt={s.name} className="absolute inset-0 w-full h-full object-cover transition-transform duration-1000 group-hover:scale-110" />
+                       <div className="absolute inset-0 bg-gradient-to-t from-black/80 via-black/20 to-transparent p-10 flex flex-col justify-end">
+                         <div className={`w-14 h-14 bg-${s.color}-500 text-white rounded-2xl flex items-center justify-center mb-6 shadow-lg transform group-hover:rotate-12 transition-transform`}>
+                           <s.icon size={28} />
+                         </div>
+                         <h4 className="text-3xl font-black text-white">{s.name}</h4>
+                         <p className="text-white/60 font-bold uppercase tracking-widest text-xs mt-2 group-hover:text-white transition-colors">Start Practice</p>
+                       </div>
+                     </div>
+                   ))}
+                </div>
+              </div>
+            </section>
+
+            {/* Final CTA */}
+            <section className="py-32 px-6">
+               <div className="max-w-6xl mx-auto bg-gradient-to-br from-indigo-600 to-blue-700 rounded-[4rem] p-20 text-center text-white relative overflow-hidden shadow-3xl">
+                  <div className="absolute top-0 right-0 w-80 h-80 bg-white/10 rounded-full blur-3xl -translate-y-1/2 translate-x-1/2"></div>
+                  <div className="absolute bottom-0 left-0 w-80 h-80 bg-blue-400/20 rounded-full blur-3xl translate-y-1/2 -translate-x-1/2"></div>
+                  <div className="relative z-10 space-y-10">
+                    <h3 className="text-5xl sm:text-7xl font-black tracking-tight">Ready to Level Up?</h3>
+                    <p className="text-xl sm:text-3xl text-blue-100 font-medium max-w-3xl mx-auto">Master any subject, anytime. Create your first custom worksheet in just 30 seconds!</p>
+                    <button onClick={() => setView('setup')} className="px-20 py-10 bg-white text-blue-700 font-black text-4xl rounded-[3rem] shadow-2xl transition-all hover:-translate-y-2 active:scale-95 hover:bg-blue-50">
+                      Let's Start! <Rocket className="inline ml-4" size={48} />
+                    </button>
+                  </div>
+               </div>
             </section>
           </div>
         )}
 
         {view === 'setup' && (
-          <div className="max-w-4xl mx-auto px-4 py-16 space-y-12 animate-in slide-in-from-bottom-6">
-            <header className="text-center space-y-2">
-              <h2 className="text-4xl font-black text-slate-900">Worksheet Setup</h2>
-              <p className="text-slate-500 font-medium text-lg">Customize your math challenge</p>
+          <div className="max-w-5xl mx-auto px-6 py-20 space-y-16 animate-in slide-in-from-bottom-8 duration-700">
+            <header className="text-center space-y-4">
+              <h2 className="text-5xl sm:text-6xl font-black text-slate-900 tracking-tight">Setup Your Mission</h2>
+              <p className="text-xl text-slate-500 font-medium max-w-xl mx-auto">Follow the steps below to build your perfect custom worksheet.</p>
             </header>
 
-            <div className="space-y-10">
-              <section className="bg-white p-8 rounded-[2rem] border-2 border-slate-100 shadow-sm">
-                <div className="flex items-center gap-3 mb-8">
-                  <span className="bg-blue-600 text-white w-10 h-10 rounded-xl flex items-center justify-center font-black text-lg shadow-lg shadow-blue-100">1</span>
-                  <h3 className="text-2xl font-black text-slate-800 tracking-tight">Select Class</h3>
-                </div>
-                <div className="grid grid-cols-2 sm:grid-cols-4 gap-4">
-                  {Object.keys(CBSE_TOPICS).map(g => (
-                    <button 
-                      key={g} 
-                      onClick={() => { setGrade(g); setTopic(null); }}
-                      className={`p-6 rounded-2xl border-4 transition-all text-left group ${grade === g ? 'border-blue-600 bg-blue-50/50' : 'border-slate-50 bg-slate-50 hover:border-blue-100'}`}
-                    >
-                      <div className={`font-black text-2xl ${grade === g ? 'text-blue-700' : 'text-slate-700'}`}>{g}</div>
-                      <div className="text-[10px] font-bold text-slate-400 uppercase mt-1 tracking-widest">Mathematics</div>
-                    </button>
-                  ))}
-                </div>
-              </section>
-
-              {grade && (
-                <section className="bg-white p-8 rounded-[2rem] border-2 border-slate-100 shadow-sm animate-in slide-in-from-bottom-4">
-                  <div className="flex items-center gap-3 mb-8">
-                    <span className="bg-orange-500 text-white w-10 h-10 rounded-xl flex items-center justify-center font-black text-lg shadow-lg shadow-orange-100">2</span>
-                    <h3 className="text-2xl font-black text-slate-800 tracking-tight">Choose Topic</h3>
+            <div className="grid grid-cols-1 lg:grid-cols-12 gap-12">
+              <div className="lg:col-span-8 space-y-12 text-left">
+                <section className="bg-white p-10 rounded-[3rem] shadow-2xl shadow-slate-100 border-2 border-slate-50">
+                  <div className="flex items-center gap-6 mb-10">
+                    <span className="bg-slate-900 text-white w-14 h-14 rounded-2xl flex items-center justify-center font-black text-2xl shadow-lg">1</span>
+                    <h3 className="text-3xl font-black">Select Your Class</h3>
                   </div>
-                  <div className="flex flex-wrap gap-2.5">
-                    {CBSE_TOPICS[grade].map(t => (
-                      <button 
-                        key={t} 
-                        onClick={() => setTopic(t)}
-                        className={`px-5 py-3 rounded-xl border-2 font-bold transition-all ${topic === t ? 'bg-orange-500 border-orange-500 text-white shadow-xl scale-105' : 'bg-white border-slate-100 text-slate-600 hover:border-orange-300'}`}
-                      >
-                        {t}
+                  <div className="grid grid-cols-2 sm:grid-cols-4 gap-4">
+                    {Object.keys(CURRICULUM).map(g => (
+                      <button key={g} onClick={() => { setGrade(g); setSubject(null); setTopic(null); }}
+                        className={`p-6 rounded-[1.75rem] border-4 transition-all text-center group ${grade === g ? 'border-blue-500 bg-blue-50' : 'border-slate-50 bg-slate-50 hover:border-blue-200'}`}>
+                        <div className={`font-black text-3xl mb-1 ${grade === g ? 'text-blue-700' : 'text-slate-700'}`}>{g.replace('Class ', '')}</div>
+                        <div className="text-[10px] font-black text-slate-400 uppercase tracking-widest">Grade</div>
                       </button>
                     ))}
                   </div>
                 </section>
-              )}
 
-              {topic && (
-                <div className="grid grid-cols-1 md:grid-cols-2 gap-8 animate-in slide-in-from-bottom-4">
-                  <section className="bg-white p-8 rounded-[2rem] border-2 border-slate-100 shadow-sm">
-                    <div className="flex items-center gap-3 mb-8">
-                      <span className="bg-green-500 text-white w-10 h-10 rounded-xl flex items-center justify-center font-black text-lg">3</span>
-                      <h3 className="text-2xl font-black text-slate-800">Difficulty</h3>
+                {grade && (
+                  <section className="bg-white p-10 rounded-[3rem] shadow-2xl shadow-slate-100 border-2 border-slate-50 animate-in slide-in-from-bottom-6 duration-500">
+                    <div className="flex items-center gap-6 mb-10">
+                      <span className="bg-slate-900 text-white w-14 h-14 rounded-2xl flex items-center justify-center font-black text-2xl shadow-lg">2</span>
+                      <h3 className="text-3xl font-black">Choose a Subject</h3>
                     </div>
-                    <div className="space-y-3">
-                      {Object.values(Difficulty).map(d => (
-                        <button 
-                          key={d} 
-                          onClick={() => setDifficulty(d)}
-                          className={`w-full p-5 rounded-2xl border-2 text-left transition-all ${difficulty === d ? 'border-green-500 bg-green-50' : 'border-slate-50 bg-slate-50 hover:border-green-200'}`}
-                        >
-                          <span className="block font-black text-slate-800 text-lg">{d.split('(')[0]}</span>
-                          <span className="text-xs font-bold text-slate-400 uppercase tracking-widest">{d.split('(')[1].replace(')', '')}</span>
+                    <div className="grid grid-cols-1 sm:grid-cols-2 gap-4">
+                      {Object.keys(CURRICULUM[grade]).map(s => {
+                        const sColor = SUBJECT_COLORS[s] || 'blue';
+                        return (
+                          <button key={s} onClick={() => { setSubject(s); setTopic(null); }}
+                            className={`p-8 rounded-[2rem] border-4 transition-all flex items-center gap-6 text-left ${subject === s ? `border-${sColor}-500 bg-${sColor}-50` : 'border-slate-50 bg-slate-50 hover:border-slate-200'}`}>
+                            <div className={`w-14 h-14 rounded-2xl flex items-center justify-center shadow-lg ${subject === s ? `bg-${sColor}-500 text-white` : 'bg-white text-slate-400'}`}>
+                              <SubjectIcon subject={s} size={28} />
+                            </div>
+                            <div>
+                              <span className={`font-black text-2xl block ${subject === s ? `text-${sColor}-700` : 'text-slate-700'}`}>{s}</span>
+                              <span className="text-xs font-bold text-slate-400 uppercase tracking-widest">Core Module</span>
+                            </div>
+                          </button>
+                        );
+                      })}
+                    </div>
+                  </section>
+                )}
+
+                {subject && (
+                  <section className="bg-white p-10 rounded-[3rem] shadow-2xl shadow-slate-100 border-2 border-slate-50 animate-in slide-in-from-bottom-6 duration-500">
+                    <div className="flex items-center gap-6 mb-10">
+                      <span className="bg-slate-900 text-white w-14 h-14 rounded-2xl flex items-center justify-center font-black text-2xl shadow-lg">3</span>
+                      <h3 className="text-3xl font-black">Pick Your Topic</h3>
+                    </div>
+                    <div className="flex flex-wrap gap-3">
+                      {CURRICULUM[grade!][subject].map(t => (
+                        <button key={t} onClick={() => setTopic(t)}
+                          className={`px-8 py-5 rounded-[1.25rem] border-4 font-black text-lg transition-all ${topic === t ? 'bg-slate-900 border-slate-900 text-white shadow-xl scale-105' : 'bg-white border-slate-100 text-slate-600 hover:border-slate-400'}`}>
+                          {t}
                         </button>
                       ))}
                     </div>
                   </section>
+                )}
+              </div>
 
-                  <section className="bg-white p-8 rounded-[2rem] border-2 border-slate-100 shadow-sm">
-                    <div className="flex items-center gap-3 mb-8">
-                      <span className="bg-purple-600 text-white w-10 h-10 rounded-xl flex items-center justify-center font-black text-lg">4</span>
-                      <h3 className="text-2xl font-black text-slate-800">Questions</h3>
-                    </div>
-                    <div className="grid grid-cols-2 gap-4">
-                      {[5, 10, 15, 20].map(n => (
-                        <button 
-                          key={n} 
-                          onClick={() => setNumQuestions(n)}
-                          className={`p-6 rounded-2xl border-4 font-black text-3xl transition-all ${numQuestions === n ? 'border-purple-600 bg-purple-50 text-purple-700 shadow-inner' : 'border-slate-50 bg-slate-50 text-slate-400 hover:border-purple-200'}`}
-                        >
-                          {n}
-                        </button>
-                      ))}
-                    </div>
-                  </section>
-                </div>
-              )}
+              <div className="lg:col-span-4 text-left">
+                 <div className="sticky top-32 space-y-8">
+                    {topic ? (
+                      <div className="bg-white p-10 rounded-[3rem] shadow-2xl shadow-slate-100 border-2 border-slate-50 space-y-10 animate-in fade-in zoom-in duration-500">
+                         <div>
+                            <h4 className="font-black text-2xl mb-6 flex items-center gap-3">
+                              <Star className="text-yellow-400 fill-current" size={24} /> Challenge Level
+                            </h4>
+                            <div className="space-y-3">
+                              {Object.values(Difficulty).map(d => (
+                                <button key={d} onClick={() => setDifficulty(d)} 
+                                  className={`w-full p-6 rounded-2xl border-4 text-left font-black transition-all ${difficulty === d ? 'border-blue-600 bg-blue-50 text-blue-700' : 'border-slate-50 bg-slate-50'}`}>
+                                  {d.split('(')[0]}
+                                </button>
+                              ))}
+                            </div>
+                         </div>
+                         
+                         <div>
+                            <h4 className="font-black text-2xl mb-6 flex items-center gap-3">
+                              <Zap className="text-orange-500" size={24} /> Questions
+                            </h4>
+                            <div className="grid grid-cols-2 gap-3">
+                              {[5, 10, 15, 20].map(n => (
+                                <button key={n} onClick={() => setNumQuestions(n)} 
+                                  className={`p-6 rounded-2xl border-4 font-black text-3xl transition-all ${numQuestions === n ? 'border-blue-600 bg-blue-50 text-blue-700' : 'border-slate-50 bg-slate-50 text-slate-400'}`}>
+                                  {n}
+                                </button>
+                              ))}
+                            </div>
+                         </div>
 
-              {topic && (
-                <button 
-                  onClick={handleGenerate}
-                  className="w-full bg-blue-600 hover:bg-blue-700 text-white font-black py-8 rounded-[2.5rem] shadow-2xl shadow-blue-200 flex items-center justify-center gap-4 transition-all hover:-translate-y-1 active:scale-95 text-3xl animate-in slide-in-from-bottom-6"
-                >
-                  <Rocket size={40} />
-                  Build My Worksheet
-                </button>
-              )}
+                         <button onClick={handleGenerate} className="group w-full bg-blue-600 text-white font-black py-8 rounded-[2rem] shadow-2xl shadow-blue-200 text-3xl flex items-center justify-center gap-4 hover:bg-blue-700 active:scale-95 transition-all">
+                           Launch <Rocket size={40} className="group-hover:translate-x-1 group-hover:-translate-y-1 transition-transform" />
+                         </button>
+                      </div>
+                    ) : (
+                      <div className="bg-slate-100/50 p-12 rounded-[3rem] border-4 border-dashed border-slate-200 text-center text-slate-400">
+                         <Sparkles size={64} className="mx-auto mb-6 opacity-30" />
+                         <p className="font-black text-xl leading-relaxed">Select Grade, Subject & Topic to reveal settings!</p>
+                      </div>
+                    )}
+
+                    <div className="p-8 rounded-[2.5rem] bg-gradient-to-br from-purple-500 to-indigo-600 text-white shadow-xl relative overflow-hidden">
+                       <Quote className="mb-4 opacity-50 relative z-10" size={32} />
+                       <p className="text-xl font-bold italic mb-4 leading-relaxed relative z-10">"{randomQuote.text}"</p>
+                       <div className="h-1 w-12 bg-white/30 rounded-full relative z-10"></div>
+                       <Sparkles className="absolute -bottom-4 -right-4 opacity-10" size={100} />
+                    </div>
+                 </div>
+              </div>
             </div>
           </div>
         )}
 
         {view === 'worksheet' && worksheet && (
-          <div className="max-w-5xl mx-auto px-4 py-12 space-y-8 print:m-0 print:p-0 print:w-full">
-            <div className="sticky top-24 z-40 bg-white/90 backdrop-blur-md p-4 rounded-3xl border-2 border-slate-100 shadow-2xl flex items-center justify-between print:hidden">
-              <button onClick={reset} className="flex items-center text-slate-500 hover:text-blue-600 font-black transition-colors px-4 py-2 rounded-xl hover:bg-slate-50">
-                <ChevronLeft size={20} /> New
+          <div className="max-w-5xl mx-auto px-4 py-16 space-y-12 print:m-0 print:p-0 print:w-full">
+            <div className="sticky top-28 z-40 glass-card p-6 rounded-[2.5rem] shadow-2xl flex flex-wrap items-center justify-between gap-6 print:hidden">
+              <button onClick={reset} className="flex items-center gap-2 text-slate-500 font-black hover:text-blue-600 px-6 py-3 rounded-2xl hover:bg-slate-100 transition-all">
+                <ChevronLeft size={24} /> Back to Setup
               </button>
-              <div className="flex items-center gap-3">
-                <button onClick={handleGenerate} className="p-3 bg-slate-100 text-slate-500 rounded-2xl hover:bg-slate-200 transition-colors" title="Regenerate">
-                  <RefreshCw size={24} />
-                </button>
+              <div className="flex items-center gap-4">
                 <button 
-                  onClick={handleExportPDF}
-                  disabled={isExporting}
-                  className={`px-8 py-3.5 rounded-2xl font-black text-white shadow-xl transition-all flex items-center gap-3 ${isExporting ? 'bg-slate-400 cursor-not-allowed' : 'bg-blue-600 hover:bg-blue-700 active:scale-95'}`}
+                  onClick={handleExportPDF} 
+                  disabled={isExporting} 
+                  className={`px-10 py-5 rounded-[1.5rem] font-black text-white shadow-xl flex items-center gap-4 transition-all ${isExporting ? 'bg-slate-400' : 'bg-slate-900 hover:bg-black active:scale-95'}`}
                 >
-                  {isExporting ? <RefreshCw className="animate-spin" size={24} /> : <FileDown size={24} />}
-                  {isExporting ? 'Creating PDF...' : 'Download PDF'}
+                  {isExporting ? <RefreshCw className="animate-spin" size={24} /> : <FileDown size={24} />} 
+                  {isExporting ? 'Preparing PDF...' : 'Download PDF'}
                 </button>
-                <button onClick={() => window.print()} className="p-3 bg-slate-900 text-white rounded-2xl hover:bg-slate-800 hidden sm:flex">
-                  <Printer size={24} />
+                <button onClick={() => window.print()} className="p-5 bg-blue-50 text-blue-600 rounded-[1.5rem] hover:bg-blue-100 transition-all hidden sm:block">
+                  <Printer size={28} />
                 </button>
               </div>
             </div>
 
-            <article ref={worksheetRef} className="bg-white rounded-[3rem] shadow-2xl border border-slate-100 overflow-hidden worksheet-container print:border-none print:shadow-none print:rounded-none">
-              <div className="px-12 py-20 text-center border-b-4 border-slate-50 relative print:py-10">
-                <div className="absolute top-10 right-10 text-slate-50 print:hidden" aria-hidden="true"><Calculator size={120} /></div>
-                <h2 className="text-4xl font-black text-slate-900 mb-8 print:text-3xl print:mb-4">{worksheet.title}</h2>
+            <article ref={worksheetRef} className="bg-white rounded-[4rem] shadow-2xl border border-slate-100 overflow-hidden worksheet-container print:border-none print:shadow-none print:rounded-none">
+              <div className="hidden print:flex items-center justify-between p-12 border-b-2 border-slate-50 mb-10">
+                 <div className="flex items-center gap-3">
+                    <BrainCircuit className="text-blue-600" size={32} />
+                    <span className="text-2xl font-black">Practice<span className="text-blue-600">WithAI</span></span>
+                 </div>
+                 <div className="text-right">
+                    <div className="text-[10px] font-black text-slate-400 uppercase tracking-widest">Custom AI Practice Sheet</div>
+                    <div className="text-xs font-bold text-slate-900">{new Date().toLocaleDateString()}</div>
+                 </div>
+              </div>
+
+              <div className={`px-12 py-24 text-center bg-gradient-to-b from-${currentThemeColor}-50 to-white relative`}>
+                <div className="absolute top-12 right-12 opacity-5 print:hidden"><SubjectIcon subject={worksheet.subject} size={180} /></div>
+                <h2 className="text-5xl font-black text-slate-900 mb-8 print:text-4xl">{worksheet.title}</h2>
                 <div className="flex flex-wrap justify-center gap-4">
-                  <span className="px-6 py-2 bg-blue-100 text-blue-700 rounded-full text-xs font-black uppercase tracking-[0.2em] print:bg-slate-100 print:text-slate-900">
-                    Grade: {worksheet.grade}
-                  </span>
-                  <span className="px-6 py-2 bg-orange-100 text-orange-700 rounded-full text-xs font-black uppercase tracking-[0.2em] print:bg-slate-100 print:text-slate-900">
-                    Topic: {worksheet.topic}
-                  </span>
-                  <span className="px-6 py-2 bg-indigo-100 text-indigo-700 rounded-full text-xs font-black uppercase tracking-[0.2em] print:bg-slate-100 print:text-slate-900">
-                    {worksheet.difficulty.split('(')[0]}
-                  </span>
+                   <span className="px-8 py-3 bg-slate-900 text-white rounded-2xl text-xs font-black uppercase tracking-[0.2em] shadow-lg">GRADE: {worksheet.grade}</span>
+                   <span className={`px-8 py-3 bg-${currentThemeColor}-500 text-white rounded-2xl text-xs font-black uppercase tracking-[0.2em] shadow-lg`}>{worksheet.subject}</span>
+                   <span className="px-8 py-3 bg-white text-slate-500 rounded-2xl text-xs font-black uppercase tracking-[0.2em] shadow-lg border border-slate-100">{worksheet.difficulty.split('(')[0]}</span>
                 </div>
               </div>
 
-              <div className="p-12 sm:p-20 space-y-20 print:p-0 print:pt-10 print:space-y-12">
+              <div className="p-12 sm:p-24 space-y-24 print:p-0 print:pt-12 print:space-y-16 text-left">
                 {worksheet.questions.map((q, idx) => (
                   <section key={q.id} className="relative group page-break-avoid">
-                    <div className="flex items-start gap-8">
-                      <div className="w-12 h-12 rounded-2xl bg-slate-900 text-white flex items-center justify-center font-black text-xl flex-shrink-0 shadow-lg print:border-2 print:bg-white print:text-slate-900 print:shadow-none">
+                    <div className="flex items-start gap-10">
+                      <div className="w-16 h-16 rounded-[1.5rem] bg-slate-900 text-white flex items-center justify-center font-black text-2xl flex-shrink-0 shadow-xl print:shadow-none print:border-2">
                         {idx + 1}
                       </div>
-                      <div className="flex-1 space-y-8">
-                        <h4 className="text-2xl font-bold text-slate-800 leading-snug print:text-xl">
-                          {q.question}
-                        </h4>
+                      <div className="flex-1 space-y-10">
+                        <h4 className="text-3xl font-bold text-slate-800 leading-tight print:text-2xl">{q.question}</h4>
                         
-                        {q.type === 'MCQ' && q.options && q.options.length > 0 && (
-                          <div className="grid grid-cols-1 sm:grid-cols-2 gap-6 print:grid-cols-2 print:gap-4">
+                        {q.type === 'MCQ' && q.options && (
+                          <div className="grid grid-cols-1 sm:grid-cols-2 gap-8 print:grid-cols-2 print:gap-4">
                             {q.options.map((opt, oIdx) => (
-                              <label key={oIdx} className={`p-6 border-4 rounded-[2rem] flex items-center gap-6 cursor-pointer transition-all print:border-slate-200 print:rounded-xl print:p-4 ${userAnswers[q.id] === opt ? 'border-blue-600 bg-blue-50/50' : 'bg-white border-slate-50 hover:bg-slate-50'}`}>
-                                <input type="radio" name={`q-${q.id}`} className="hidden" checked={userAnswers[q.id] === opt} onChange={() => setUserAnswers({...userAnswers, [q.id]: opt})} />
-                                <span className={`w-10 h-10 rounded-xl border-4 flex items-center justify-center font-black text-sm uppercase ${userAnswers[q.id] === opt ? 'bg-blue-600 text-white border-blue-600' : 'bg-white text-slate-300'}`}>
+                              <label key={oIdx} className={`group p-8 border-4 rounded-[2.5rem] flex items-center gap-8 cursor-pointer transition-all ${userAnswers[q.id] === opt ? 'border-blue-500 bg-blue-50' : 'bg-white border-slate-50 hover:bg-slate-50'}`}>
+                                <input type="radio" name={`q-${q.id}`} className="hidden" onChange={() => setUserAnswers({...userAnswers, [q.id]: opt})} />
+                                <span className={`w-12 h-12 rounded-[1rem] flex items-center justify-center font-black text-sm uppercase transition-all ${userAnswers[q.id] === opt ? 'bg-blue-600 text-white shadow-lg' : 'bg-white text-slate-300 border-2'}`}>
                                   {String.fromCharCode(65 + oIdx)}
                                 </span>
-                                <span className="text-xl font-bold text-slate-700 print:text-lg">{opt}</span>
+                                <span className="text-xl font-bold text-slate-700">{opt}</span>
                               </label>
                             ))}
                           </div>
                         )}
 
                         {q.type === 'Short Answer' && (
-                          <div className="mt-4">
-                            <div className="w-full bg-slate-50 border-4 border-transparent rounded-[1.5rem] px-8 py-6 text-xl font-bold text-slate-800 print:bg-white print:border-b-2 print:border-slate-200 print:rounded-none print:px-0">
-                               <input 
-                                 type="text" 
-                                 className="w-full bg-transparent outline-none placeholder:text-slate-300"
-                                 placeholder="Type your answer here..."
-                                 value={userAnswers[q.id] || ''}
-                                 onChange={(e) => setUserAnswers({...userAnswers, [q.id]: e.target.value})}
-                               />
-                            </div>
+                          <div className="w-full bg-slate-50 border-4 border-transparent rounded-[2rem] px-10 py-8 text-2xl font-bold shadow-inner print:bg-white print:border-slate-100 print:shadow-none">
+                             <input type="text" placeholder="Write your answer here..." className="w-full bg-transparent outline-none placeholder:text-slate-300" value={userAnswers[q.id] || ''} onChange={(e) => setUserAnswers({...userAnswers, [q.id]: e.target.value})} />
                           </div>
                         )}
 
-                        <div className="flex items-center gap-4 pt-4 print:hidden">
-                          <button onClick={() => setVisibleSolutions({...visibleSolutions, [q.id]: !visibleSolutions[q.id]})} className="text-sm font-black text-blue-600 uppercase tracking-widest flex items-center gap-2 hover:bg-blue-50 px-4 py-2 rounded-xl transition-all">
-                            <Lightbulb size={18} />
-                            {visibleSolutions[q.id] ? "Hide Guide" : "Solve it!"}
+                        <div className="flex items-center gap-6 pt-6 print:hidden">
+                          <button onClick={() => setVisibleSolutions({...visibleSolutions, [q.id]: !visibleSolutions[q.id]})} className="text-sm font-black text-blue-600 uppercase tracking-widest flex items-center gap-3 hover:bg-blue-50 px-6 py-3 rounded-2xl transition-all">
+                            <Lightbulb size={24} className={visibleSolutions[q.id] ? "text-yellow-400 fill-current" : ""} /> 
+                            {visibleSolutions[q.id] ? "Hide Explained Solution" : "Show Explained Solution"}
                           </button>
                         </div>
 
                         {visibleSolutions[q.id] && (
-                          <div className="bg-blue-50/50 p-8 rounded-[2rem] border-l-8 border-blue-600 animate-in slide-in-from-top-4 print:hidden">
-                            <h5 className="text-[10px] font-black text-blue-800 uppercase tracking-[0.3em] mb-4">Master's Hint & Solution:</h5>
-                            <p className="text-slate-700 text-lg font-medium leading-relaxed whitespace-pre-wrap">{q.solution}</p>
+                          <div className="bg-slate-900 p-10 rounded-[3rem] text-white animate-in slide-in-from-top-6 duration-500 shadow-2xl relative print:hidden">
+                            <Quote className="absolute top-6 left-6 opacity-20" size={40} />
+                            <div className="ml-10">
+                              <h5 className="text-[10px] font-black uppercase tracking-[0.5em] text-blue-400 mb-6 text-left">Expert Breakdown</h5>
+                              <p className="text-xl font-medium leading-relaxed opacity-90 text-left">{q.solution}</p>
+                            </div>
                           </div>
                         )}
 
                         {isGraded && (
-                          <div className={`mt-6 p-6 rounded-2xl font-black text-lg flex items-center gap-4 animate-in zoom-in print:hidden ${userAnswers[q.id]?.toLowerCase().trim() === q.answer.toLowerCase().trim() ? 'bg-green-100 text-green-700' : 'bg-red-100 text-red-700'}`}>
-                             <div className={`w-8 h-8 rounded-full flex items-center justify-center text-white ${userAnswers[q.id]?.toLowerCase().trim() === q.answer.toLowerCase().trim() ? 'bg-green-500' : 'bg-red-500'}`}>
-                               {userAnswers[q.id]?.toLowerCase().trim() === q.answer.toLowerCase().trim() ? '✓' : '!'}
+                          <div className={`mt-8 p-8 rounded-[2rem] font-black text-2xl flex items-center gap-6 animate-in zoom-in duration-500 shadow-lg ${userAnswers[q.id]?.toLowerCase().trim() === q.answer.toLowerCase().trim() ? 'bg-green-100 text-green-700' : 'bg-red-100 text-red-700'} print:hidden`}>
+                             <div className={`w-12 h-12 rounded-full flex items-center justify-center text-white ${userAnswers[q.id]?.toLowerCase().trim() === q.answer.toLowerCase().trim() ? 'bg-green-500' : 'bg-red-500'}`}>
+                                {userAnswers[q.id]?.toLowerCase().trim() === q.answer.toLowerCase().trim() ? '✓' : '!'}
                              </div>
-                             <span>{userAnswers[q.id]?.toLowerCase().trim() === q.answer.toLowerCase().trim() ? "Correct! Amazing work." : `The correct answer is: ${q.answer}`}</span>
+                             <span>{userAnswers[q.id]?.toLowerCase().trim() === q.answer.toLowerCase().trim() ? "You Got It! Great Job!" : `The Correct Answer: ${q.answer}`}</span>
                           </div>
                         )}
                       </div>
@@ -475,32 +620,15 @@ export default function App() {
                 ))}
               </div>
 
-              <div className="hidden print:flex flex-col items-center p-12 border-t-2 mt-20 text-slate-300">
-                <div className="flex items-center gap-3 mb-3">
-                   <FileText size={20} />
-                   <span className="text-xs font-black uppercase tracking-[0.4em]">MathMaster Official AI Academy Document</span>
-                </div>
-                <div className="flex gap-8 text-[10px] font-black uppercase tracking-widest opacity-60">
-                   <span>ID: #{Math.random().toString(36).substr(2, 9).toUpperCase()}</span>
-                   <span>•</span>
-                   <span>CBSE {grade} Mathematics</span>
-                   <span>•</span>
-                   <span>{new Date().toLocaleDateString('en-IN')}</span>
-                </div>
-              </div>
-
-              <div className="px-12 py-16 bg-slate-900 text-white flex flex-col md:flex-row items-center justify-between gap-8 print:hidden">
-                 <div>
-                    <h3 className="text-3xl font-black mb-2">Practice Done? 🎉</h3>
-                    <p className="text-slate-400 text-xl font-medium">Review your answers or challenge yourself again.</p>
+              <div className="px-12 py-24 bg-gradient-to-br from-slate-900 to-black text-white flex flex-col items-center text-center gap-12 print:hidden">
+                 <div className="max-w-2xl">
+                    <Trophy size={80} className="text-yellow-400 mx-auto mb-8 animate-bounce" />
+                    <h3 className="text-5xl font-black mb-6">Practice Complete! 🎉</h3>
+                    <p className="text-white/60 text-2xl font-medium leading-relaxed">You've finished your custom session. Ready to see how you did or start a new challenge?</p>
                  </div>
-                 <div className="flex gap-4">
-                    <button onClick={() => setIsGraded(true)} className="px-10 py-5 bg-green-500 hover:bg-green-600 text-white rounded-[1.5rem] font-black text-xl shadow-2xl transition-all active:scale-95">
-                      Check Answers
-                    </button>
-                    <button onClick={reset} className="px-10 py-5 bg-white text-slate-900 rounded-[1.5rem] font-black text-xl shadow-2xl transition-all hover:bg-slate-100 active:scale-95">
-                      Start New
-                    </button>
+                 <div className="flex flex-col sm:flex-row gap-6 w-full max-w-2xl">
+                    <button onClick={() => setIsGraded(true)} className="flex-1 py-8 bg-green-500 hover:bg-green-600 text-white rounded-[2rem] font-black text-3xl shadow-2xl active:scale-95 transition-all">Check Scores</button>
+                    <button onClick={reset} className="flex-1 py-8 bg-white text-slate-900 rounded-[2rem] font-black text-3xl shadow-2xl hover:bg-slate-100 active:scale-95 transition-all">New Mission</button>
                  </div>
               </div>
             </article>
@@ -508,25 +636,28 @@ export default function App() {
         )}
       </main>
 
-      <footer className="bg-white py-24 px-6 border-t border-slate-100 text-center print:hidden">
-        <div className="max-w-6xl mx-auto">
-          <div className="flex items-center justify-center gap-4 mb-10">
-            <GraduationCap className="text-blue-600 w-10 h-10" />
-            <h2 className="text-3xl font-black text-slate-900">MathMaster</h2>
+      <footer className="bg-white py-32 border-t border-slate-100 text-center print:hidden relative overflow-hidden">
+        <div className="max-w-4xl mx-auto px-6 relative z-10">
+          <div className="flex items-center justify-center gap-4 mb-10 group cursor-default">
+            <div className="bg-slate-900 p-2 rounded-xl group-hover:rotate-12 transition-transform shadow-lg"><BrainCircuit className="text-white w-8 h-8" /></div>
+            <h2 className="text-4xl font-black text-slate-900">PracticeWithAI</h2>
           </div>
-          <p className="text-slate-500 font-medium max-w-2xl mx-auto mb-12 text-lg leading-relaxed">
-            MathMaster Academy India is dedicated to providing high-quality, AI-powered mathematics resources aligned with CBSE and NCERT guidelines to every student for free.
-          </p>
-          <div className="flex justify-center gap-12 text-xs font-black text-slate-400 uppercase tracking-[0.4em] mb-12">
-            <span>Privacy</span>
-            <span>Terms</span>
-            <span>Academy</span>
-            <span>Teachers</span>
+          <p className="text-slate-500 font-medium text-xl mb-16 leading-relaxed">Empowering students with the power of Artificial Intelligence. Your personal tutor for every subject, every grade, and every day.</p>
+          
+          <div className="flex flex-wrap justify-center gap-10 text-sm font-black text-slate-400 uppercase tracking-[0.4em] mb-16">
+            <a href="#" className="hover:text-blue-600 transition-colors">Privacy</a>
+            <a href="#" className="hover:text-blue-600 transition-colors">Terms</a>
+            <a href="#" className="hover:text-blue-600 transition-colors">Curriculum</a>
+            <a href="#" className="hover:text-blue-600 transition-colors">Contact</a>
           </div>
-          <div className="text-[10px] font-bold text-slate-300 uppercase tracking-[0.5em]">
-            &copy; 2024 MathMaster AI Academy • Made for Indian Classrooms
+
+          <div className="text-[12px] font-black text-slate-300 uppercase tracking-[0.5em]">
+            &copy; 2024 PracticeWithAI • Made with <Heart className="inline text-red-400 fill-current mx-1" size={12} /> for the next generation
           </div>
         </div>
+        
+        <div className="absolute top-0 left-0 w-64 h-64 bg-blue-50 rounded-full blur-3xl -translate-x-1/2 -translate-y-1/2 opacity-30"></div>
+        <div className="absolute bottom-0 right-0 w-64 h-64 bg-purple-50 rounded-full blur-3xl translate-x-1/2 translate-y-1/2 opacity-30"></div>
       </footer>
     </div>
   );

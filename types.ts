@@ -1,8 +1,8 @@
 
 export enum Difficulty {
-  EASY = 'Easy (NCERT Level)',
-  MEDIUM = 'Medium (Standard Practice)',
-  HARD = 'Hard (Olympiad/Competitive)'
+  EASY = 'Easy (Foundation)',
+  MEDIUM = 'Medium (Standard)',
+  HARD = 'Hard (Exemplar/Advanced)'
 }
 
 export interface Question {
@@ -17,11 +17,16 @@ export interface Question {
 export interface Worksheet {
   title: string;
   grade: string;
+  subject: string;
   topic: string;
   difficulty: Difficulty;
   questions: Question[];
 }
 
-export interface CBSEData {
-  [grade: string]: string[];
+export interface SubjectData {
+  [subjectName: string]: string[];
+}
+
+export interface CurriculumData {
+  [grade: string]: SubjectData;
 }

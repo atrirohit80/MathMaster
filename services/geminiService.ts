@@ -6,27 +6,31 @@ const ai = new GoogleGenAI({ apiKey: process.env.API_KEY || "" });
 
 export async function generateWorksheetData(
   grade: string,
+  subject: string,
   topic: string,
   difficulty: Difficulty,
   numQuestions: number
 ): Promise<Worksheet> {
-  // Using Pro for maximum quality in educational logic
   const model = "gemini-3-pro-preview";
   
-  const prompt = `You are a world-class Mathematics educator specialized in the CBSE/NCERT curriculum for India.
-  Generate a professional math worksheet for ${grade}.
+  const prompt = `You are an expert educator for the CBSE/NCERT curriculum in India.
+  Generate a professional, high-quality worksheet.
+  Grade: ${grade}
+  Subject: ${subject}
   Topic: ${topic}
-  Difficulty Level: ${difficulty}
+  Difficulty: ${difficulty}
   Number of Questions: Exactly ${numQuestions}
   
-  Guidelines:
-  - For Class 1: Use simple language, focus on visual concepts, and use small numbers (usually up to 20 or 50).
-  - Difficulty: 
-    - EASY: Basic recall and simple application.
-    - MEDIUM: Conceptual understanding and multi-step problems.
-    - HARD: Critical thinking, HOTS (Higher Order Thinking Skills), and Olympiad-style challenges.
-  - Mix question types: Some MCQs (provide 4 clear options) and some Short Answers.
-  - Provide a clear, child-friendly step-by-step solution for every question.
+  Specific Subject Guidelines:
+  - Science/EVS: Focus on conceptual understanding, definitions, and simple observations.
+  - Mathematics: Focus on step-by-step problem solving.
+  - English/Hindi: Focus on grammar, vocabulary, and reading comprehension.
+  - Social Science: Focus on historical facts, geography concepts, and civic roles.
+  
+  Mixed Format:
+  - Use a mix of Multiple Choice Questions (MCQ) and Short Answer questions.
+  - For MCQs, provide 4 distinct, clear options.
+  - Provide detailed "Master's Solutions" for every question that explain the reasoning.
   
   Respond ONLY with a valid JSON object matching the requested schema.`;
 
@@ -40,6 +44,7 @@ export async function generateWorksheetData(
         properties: {
           title: { type: Type.STRING },
           grade: { type: Type.STRING },
+          subject: { type: Type.STRING },
           topic: { type: Type.STRING },
           difficulty: { type: Type.STRING },
           questions: {
@@ -53,7 +58,7 @@ export async function generateWorksheetData(
                 options: { 
                   type: Type.ARRAY, 
                   items: { type: Type.STRING },
-                  description: "Required if type is MCQ, otherwise empty array"
+                  description: "Required for MCQ"
                 },
                 answer: { type: Type.STRING },
                 solution: { type: Type.STRING }
@@ -62,21 +67,17 @@ export async function generateWorksheetData(
             }
           }
         },
-        required: ["title", "grade", "topic", "difficulty", "questions"]
+        required: ["title", "grade", "subject", "topic", "difficulty", "questions"]
       }
     }
   });
 
   const text = response.text;
-  if (!text) {
-    throw new Error("No content received from AI engine.");
-  }
+  if (!text) throw new Error("No response from AI.");
 
   try {
-    const data = JSON.parse(text);
-    return data as Worksheet;
+    return JSON.parse(text) as Worksheet;
   } catch (error) {
-    console.error("AI Response Parsing Failed:", text);
-    throw new Error("The AI generated an invalid format. Please try again.");
+    throw new Error("Formatting error. Please regenerate.");
   }
 }

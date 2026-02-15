@@ -1,5 +1,5 @@
 {
-  "name": "CBSE MathMaster Worksheets",
-  "description": "An AI-powered math worksheet generator for CBSE Classes 1-8, providing tailored practice from NCERT basics to Olympiad levels with instant solutions and PDF exports.",
+  "name": "PracticewithAI",
+  "description": "An AI-powered multi-subject worksheet generator for CBSE Classes 1-8. Practice Math, Science, English, and more with instant solutions and PDF exports.",
   "requestFramePermissions": []
 }
